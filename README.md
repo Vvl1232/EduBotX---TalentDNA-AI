@@ -99,9 +99,14 @@ The job description embedding is generated at runtime.
 │   └── config.toml
 ├── data/
 │   └── raw/
+│       ├── candidate_schema.json
 │       ├── candidates.jsonl
 │       ├── job_description.docx
+│       ├── redrob_signals_doc.docx
+│       ├── sample_candidates.json
+│       ├── sample_submission.csv
 │       ├── submission_metadata.yaml
+│       ├── submission_spec.docx
 │       └── validate_submission.py
 ├── notebooks/
 │   ├── candidate_embeddings.npy
@@ -121,13 +126,18 @@ The job description embedding is generated at runtime.
 │   ├── retrieval.py
 │   ├── role_intelligence.py
 │   └── signals.py
+├── static/
+├── .gitattributes
+├── .gitignore
+├── README.md
+├── TalentDNA AI - Methodology.pdf
 ├── app.py
+├── job_description.docx
 ├── rank.py
 ├── requirements.txt
 ├── runtime.txt
 ├── submission.csv
-├── submission_metadata.yaml
-└── TalentDNA AI - Methodology.pdf
+└── submission_metadata.yaml
 ```
 
 ---
