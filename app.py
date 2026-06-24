@@ -1135,18 +1135,6 @@ if run_clicked or run_requested:
     # Reset the flag immediately to prevent loops on output interactions
     st.session_state.run_analysis = False
     
-    # Ensure the viewport scrolls to the benchmark section
-    st.components.v1.html(
-        """
-        <script>
-            setTimeout(function() {
-                var el = window.parent.document.getElementById("benchmark");
-                if (el) { el.scrollIntoView({behavior: "smooth"}); }
-            }, 150);
-        </script>
-        """,
-        height=0,
-    )
     init_slot = st.empty()
     init_slot.markdown(
         f'<div style="font-weight: 600; color: #4f46e5; text-align: center; margin: 1rem 0; font-size: 1.1rem;">'
