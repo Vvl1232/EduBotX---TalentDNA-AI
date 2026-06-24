@@ -1366,10 +1366,18 @@ with pl1:
         '</button></a>', 
         unsafe_allow_html=True
     )
-with pl2:
-    import urllib.parse
-    import requests
+import urllib.parse
+import requests
 
+@st.cache_data(ttl=3600)
+def check_pdf_reachable(url):
+    try:
+        resp = requests.head(url, allow_redirects=True, timeout=5)
+        return resp.status_code == 200
+    except:
+        return False
+
+with pl2:
     repo_owner = "Vvl1232"
     repo_name = "EduBotX---TalentDNA-AI"
     pdf_filename = "TalentDNA AI - Methodology.pdf"
@@ -1380,14 +1388,6 @@ with pl2:
     # Wrap in Google Docs Viewer to ensure native browser rendering with zoom/scroll and NO downloads
     viewer_url = f"https://docs.google.com/viewer?url={urllib.parse.quote(raw_url, safe='')}&embedded=true"
     
-    @st.cache_data(ttl=3600)
-    def check_pdf_reachable(url):
-        try:
-            resp = requests.head(url, allow_redirects=True, timeout=5)
-            return resp.status_code == 200
-        except:
-            return False
-
     if check_pdf_reachable(raw_url):
         modal_html = f"""
         <!-- Methodology PDF Button -->
