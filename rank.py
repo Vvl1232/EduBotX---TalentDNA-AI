@@ -35,8 +35,7 @@ class PipelineStage:
             err_msg = str(exc_val)
             print(f"STAGE:{self.stage_num}:ERROR:{err_type}:{err_msg}", flush=True)
             tb_str = "".join(traceback.format_exception(exc_type, exc_val, exc_tb))
-            tb_encoded = tb_str.replace('
-', '<br>').replace('', '')
+            tb_encoded = tb_str.replace('\\n', '<br>').replace('\\r', '')
             print(f"TRACEBACK:{tb_encoded}", flush=True)
             sys.exit(1)
 
@@ -62,31 +61,17 @@ def load_jd(path):
 
 
 def load_candidates(path):
-    with PipelineStage(1):
-        with open(path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-        print(f"LOG:Loaded {len(lines)} raw candidate lines", flush=True)
+    print("STAGE:1:START", flush=True)
+    # Defer actual loading to prevent OOM
+    print("STAGE:1:END", flush=True)
 
-    with PipelineStage(2):
-        parser = CandidateParser()
-        parsed_rows = []
-        for line in lines:
-            row = json.loads(line)
-            parsed_rows.append((row, parser.parse(row)))
-        print(f"LOG:Parsed {len(parsed_rows)} candidate profiles", flush=True)
+    print("STAGE:2:START", flush=True)
+    print("STAGE:2:END", flush=True)
 
-    with PipelineStage(3):
-        career = CareerFeatureExtractor()
-        candidates = []
-        for row, candidate in parsed_rows:
-            career_features = career.extract(
-                row.get("career_history", [])
-            )
-            candidate.update(career_features)
-            candidates.append(candidate)
-        print(f"LOG:Extracted career features for {len(candidates)} candidates", flush=True)
+    print("STAGE:3:START", flush=True)
+    print("STAGE:3:END", flush=True)
 
-    return candidates
+    return path
 
 
 def main():
@@ -144,13 +129,27 @@ def main():
     ranker = HybridRanker()
     reason_generator = ReasonGenerator()
 
-    # Pre-select the retrieved candidates
+    # Pre-select and parse ONLY the retrieved candidates to save memory
     retrieved_candidates = []
-    for pos, idx in enumerate(indices[0]):
-        retrieved_candidates.append({
-            "candidate": candidates[idx],
-            "semantic_score": float(scores[0][pos])
-        })
+    parser = CandidateParser()
+    career = CareerFeatureExtractor()
+    
+    target_indices = set(indices[0])
+    
+    with open(candidates, "r", encoding="utf-8") as f:
+        for i, line in enumerate(f):
+            if i in target_indices:
+                row = json.loads(line)
+                candidate = parser.parse(row)
+                candidate.update(career.extract(row.get("career_history", [])))
+                
+                # Find positions where this index matched
+                positions = np.where(indices[0] == i)[0]
+                for pos in positions:
+                    retrieved_candidates.append({
+                        "candidate": candidate,
+                        "semantic_score": float(scores[0][pos])
+                    })
 
     with PipelineStage(6):
         for rc in retrieved_candidates:
