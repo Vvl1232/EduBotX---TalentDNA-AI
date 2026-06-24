@@ -8,7 +8,7 @@ To achieve scalable and accurate candidate assessment, TalentDNA AI uses a multi
 
 # Live Demo
 
-* **Streamlit Application:** [https://edubotx---talentdna-ai-53ur7yhy33x7m2cnqsvk9u.streamlit.app/](https://edubotx---talentdna-ai-53ur7yhy33x7m2cnqsvk9u.streamlit.app/)
+* **Streamlit Application:** [https://edubotx---talentdna-ai-53ur7yhy33x7m2cnqsvk9u.streamlit.app](https://edubotx---talentdna-ai-53ur7yhy33x7m2cnqsvk9u.streamlit.app)
 
 * **GitHub Repository:** [https://github.com/Vvl1232/EduBotX---TalentDNA-AI](https://github.com/Vvl1232/EduBotX---TalentDNA-AI)
 
@@ -104,7 +104,6 @@ The job description embedding is generated at runtime.
 │       ├── submission_metadata.yaml
 │       └── validate_submission.py
 ├── notebooks/
-│   ├── 14_end_to_end_pipeline.ipynb
 │   ├── candidate_embeddings.npy
 │   └── candidate_index.faiss
 ├── src/
