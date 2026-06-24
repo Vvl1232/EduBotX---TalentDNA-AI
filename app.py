@@ -1135,19 +1135,19 @@ if run_clicked or run_requested:
     # Reset the flag immediately to prevent loops on output interactions
     st.session_state.run_analysis = False
     
-    if run_requested:
-        # Smoothly scroll to the pipeline section ONLY if the top button was clicked
-        st.components.v1.html(
-            """
-            <script>
-                setTimeout(function() {
-                    var el = window.parent.document.getElementById("benchmark");
-                    if (el) { el.scrollIntoView({behavior: "smooth", block: "start"}); }
-                }, 100);
-            </script>
-            """,
-            height=0,
-        )
+    # We must explicitly scroll for BOTH buttons to override Streamlit's native layout jumps.
+    scroll_behavior = "smooth" if run_requested else "auto"
+    st.components.v1.html(
+        f"""
+        <script>
+            setTimeout(function() {{
+                var el = window.parent.document.getElementById("benchmark");
+                if (el) {{ el.scrollIntoView({{behavior: "{scroll_behavior}", block: "start"}}); }}
+            }}, 50);
+        </script>
+        """,
+        height=0,
+    )
         
     init_slot = st.empty()
     init_slot.markdown(
