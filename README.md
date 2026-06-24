@@ -141,25 +141,50 @@ git clone https://github.com/Vvl1232/EduBotX---TalentDNA-AI.git
 cd EduBotX---TalentDNA-AI
 ```
 
-**Step 2:**
+**Step 2: Create Virtual Environment**
+
+Windows:
+
+```bash
+python -m venv venv
+venv\Scripts\activate
+```
+
+Linux / Mac:
+
+```bash
+python -m venv venv
+source venv/bin/activate
+```
+
+Purpose:
+
+* Prevent dependency conflicts.
+* Ensure reproducible setup on a fresh machine.
+* Improve judge experience during evaluation.
+
+**Step 3:**
 ```bash
 git lfs install
 git lfs pull
 ```
+
+> Important: This step is mandatory. The repository uses Git LFS to store the challenge dataset, candidate embeddings, and FAISS index. Without Git LFS, the ranking pipeline cannot be reproduced correctly because large files will be downloaded as Git LFS pointers instead of actual artifacts.
+
 This downloads `candidates.jsonl`, `candidate_embeddings.npy`, and `candidate_index.faiss`.
 
-**Step 3:**
+**Step 4:**
 ```bash
 pip install -r requirements.txt
 ```
 
-**Step 4:**
+**Step 5:**
 Run ranking:
 ```bash
 python rank.py --candidates data/raw/candidates.jsonl --jd data/raw/job_description.docx --out submission.csv
 ```
 
-**Step 5:**
+**Step 6:**
 Validate:
 ```bash
 python data/raw/validate_submission.py submission.csv
@@ -197,7 +222,7 @@ The Streamlit demo uses the same ranking pipeline and retrieval system locally a
 * Retrieval engine: FAISS
 * CPU-only execution
 * Retrieval-first memory optimization
-* Designed to execute well within challenge runtime requirements
+* Verified to execute within challenge runtime requirements using CPU-only inference and retrieval-first optimization.
 
 ---
 
