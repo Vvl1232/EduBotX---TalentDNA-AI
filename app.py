@@ -1367,10 +1367,10 @@ with pl1:
         unsafe_allow_html=True
     )
 with pl2:
-    import urllib.parse
-    pdf_filename = "TalentDNA AI - Methodology.pdf"
-    # Streamlit serves files from the 'static' folder at '/app/static/' or 'app/static/'
-    pdf_url = f"app/static/{urllib.parse.quote(pdf_filename)}"
+    # Use jsDelivr CDN to serve the PDF directly from the repo.
+    # This guarantees 'Content-Type: application/pdf' is sent, 
+    # forcing the browser to open it natively in a new tab instead of downloading.
+    pdf_url = "https://cdn.jsdelivr.net/gh/Vvl1232/EduBotX---TalentDNA-AI@main/TalentDNA%20AI%20-%20Methodology.pdf"
     
     st.markdown(
         f'<a href="{pdf_url}" target="_blank" rel="noopener noreferrer">'
