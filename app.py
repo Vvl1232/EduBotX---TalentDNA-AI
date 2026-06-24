@@ -1129,26 +1129,25 @@ if st.session_state.get("run_analysis", False):
 
 _, col_run, _ = st.columns([1, 2, 1])
 with col_run:
-    run_clicked = st.button("Run Candidate Evaluation", type="primary", use_container_width=True)
+    run_clicked = st.button("Run Candidate Evaluation", key="lower_run_btn", type="primary", use_container_width=True)
 
 if run_clicked or run_requested:
     # Reset the flag immediately to prevent loops on output interactions
     st.session_state.run_analysis = False
     
-    # We scroll for both buttons.
-    # The block="start" ensures it aligns to Pipeline Demonstration perfectly.
-    # Using behavior="auto" and setTimeout(0) prevents the visual "jump and scroll back" glitch.
-    st.components.v1.html(
-        """
-        <script>
-            setTimeout(function() {
-                var el = window.parent.document.getElementById("benchmark");
-                if (el) { el.scrollIntoView({behavior: "auto", block: "start"}); }
-            }, 0);
-        </script>
-        """,
-        height=0,
-    )
+    if run_requested:
+        # Smoothly scroll to the pipeline section ONLY if the top button was clicked
+        st.components.v1.html(
+            """
+            <script>
+                setTimeout(function() {
+                    var el = window.parent.document.getElementById("benchmark");
+                    if (el) { el.scrollIntoView({behavior: "smooth", block: "start"}); }
+                }, 100);
+            </script>
+            """,
+            height=0,
+        )
         
     init_slot = st.empty()
     init_slot.markdown(
