@@ -1137,13 +1137,14 @@ if run_clicked or run_requested:
     
     # We scroll for both buttons.
     # The block="start" ensures it aligns to Pipeline Demonstration perfectly.
+    # Using behavior="auto" and setTimeout(0) prevents the visual "jump and scroll back" glitch.
     st.components.v1.html(
         """
         <script>
             setTimeout(function() {
                 var el = window.parent.document.getElementById("benchmark");
-                if (el) { el.scrollIntoView({behavior: "smooth", block: "start"}); }
-            }, 300);
+                if (el) { el.scrollIntoView({behavior: "auto", block: "start"}); }
+            }, 0);
         </script>
         """,
         height=0,
