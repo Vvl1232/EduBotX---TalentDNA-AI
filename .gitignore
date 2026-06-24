@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Large precomputed files
+*.npy
+
+# Temporary audit/benchmark outputs
+*.log
+output.txt
+*_out.txt
+*_results.txt
+*_proof.txt
+*_check.txt
