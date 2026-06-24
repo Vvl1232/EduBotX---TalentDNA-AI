@@ -22,7 +22,7 @@ team_members:
 
 github_repo: "https://github.com/Vvl1232/EduBotX---TalentDNA-AI"
 
-sandbox_link: "https://edubotx---talentdna-ai-3kvf2fpehcgrstgtqicpuh.streamlit.app/"
+sandbox_link: "https://edubotx---talentdna-ai-53ur7yhy33x7m2cnqsvk9u.streamlit.app/"
 
 reproduce_command: "python rank.py --candidates data/raw/candidates.jsonl --jd data/raw/job_description.docx --out submission.csv"
 
