@@ -4,45 +4,6 @@ import pandas as pd
 import numpy as np
 import faiss
 from docx import Document
-import time
-import tracemalloc
-import traceback
-import sys
-
-class PipelineStage:
-    def __init__(self, stage_num):
-        self.stage_num = stage_num
-
-    def __enter__(self):
-        self.start_time = time.time()
-        tracemalloc.start()
-        self.mem_before, _ = tracemalloc.get_traced_memory()
-        print(f"STAGE:{self.stage_num}:START", flush=True)
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        mem_after, _ = tracemalloc.get_traced_memory()
-        tracemalloc.stop()
-        elapsed = time.time() - self.start_time
-        mem_before_mb = self.mem_before / (1024 * 1024)
-        mem_after_mb = mem_after / (1024 * 1024)
-        mem_diff = mem_after_mb - mem_before_mb
-
-        print(f"LOG:Stage {self.stage_num} executed in {elapsed:.2f}s | Mem Before: {mem_before_mb:.2f}MB | Mem After: {mem_after_mb:.2f}MB | Diff: {mem_diff:+.2f}MB", flush=True)
-
-        if exc_type is not None:
-            err_type = exc_type.__name__
-            err_msg = str(exc_val)
-            print(f"STAGE:{self.stage_num}:ERROR:{err_type}:{err_msg}", flush=True)
-            tb_str = "".join(traceback.format_exception(exc_type, exc_val, exc_tb))
-            tb_encoded = tb_str.replace('
-', '<br>').replace('', '')
-            print(f"TRACEBACK:{tb_encoded}", flush=True)
-            sys.exit(1)
-
-        print(f"STAGE:{self.stage_num}:END", flush=True)
-        return False
-
 
 from src.parser import CandidateParser
 from src.career_features import CareerFeatureExtractor
@@ -62,29 +23,29 @@ def load_jd(path):
 
 
 def load_candidates(path):
-    with PipelineStage(1):
-        with open(path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-        print(f"LOG:Loaded {len(lines)} raw candidate lines", flush=True)
+    print("STAGE:1:START", flush=True)
+    with open(path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    print("STAGE:1:END", flush=True)
 
-    with PipelineStage(2):
-        parser = CandidateParser()
-        parsed_rows = []
-        for line in lines:
-            row = json.loads(line)
-            parsed_rows.append((row, parser.parse(row)))
-        print(f"LOG:Parsed {len(parsed_rows)} candidate profiles", flush=True)
+    print("STAGE:2:START", flush=True)
+    parser = CandidateParser()
+    parsed_rows = []
+    for line in lines:
+        row = json.loads(line)
+        parsed_rows.append((row, parser.parse(row)))
+    print("STAGE:2:END", flush=True)
 
-    with PipelineStage(3):
-        career = CareerFeatureExtractor()
-        candidates = []
-        for row, candidate in parsed_rows:
-            career_features = career.extract(
-                row.get("career_history", [])
-            )
-            candidate.update(career_features)
-            candidates.append(candidate)
-        print(f"LOG:Extracted career features for {len(candidates)} candidates", flush=True)
+    print("STAGE:3:START", flush=True)
+    career = CareerFeatureExtractor()
+    candidates = []
+    for row, candidate in parsed_rows:
+        career_features = career.extract(
+            row.get("career_history", [])
+        )
+        candidate.update(career_features)
+        candidates.append(candidate)
+    print("STAGE:3:END", flush=True)
 
     return candidates
 
@@ -118,24 +79,27 @@ def main():
         args.jd
     )
 
-    with PipelineStage(4):
-        embedding_engine = EmbeddingEngine()
-        jd_embedding = embedding_engine.encode_text(
-            jd_text
-        )
+    print("STAGE:4:START", flush=True)
+    embedding_engine = EmbeddingEngine()
 
-    with PipelineStage(5):
-        index = faiss.read_index(
-            "notebooks/candidate_index.faiss"
-        )
-        scores, indices = index.search(
-            np.array(
-                [jd_embedding],
-                dtype=np.float32
-            ),
-            1000
-        )
-        print(f"LOG:Retrieved {len(indices[0])} candidates via FAISS", flush=True)
+    jd_embedding = embedding_engine.encode_text(
+        jd_text
+    )
+    print("STAGE:4:END", flush=True)
+
+    print("STAGE:5:START", flush=True)
+    index = faiss.read_index(
+        "notebooks/candidate_index.faiss"
+    )
+
+    scores, indices = index.search(
+        np.array(
+            [jd_embedding],
+            dtype=np.float32
+        ),
+        1000
+    )
+    print("STAGE:5:END", flush=True)
 
     role_engine = RoleIntelligenceEngine()
     evidence_engine = EvidenceMatchEngine()
@@ -152,60 +116,65 @@ def main():
             "semantic_score": float(scores[0][pos])
         })
 
-    with PipelineStage(6):
-        for rc in retrieved_candidates:
-            rc["evidence_score"] = evidence_engine.score(rc["candidate"])
+    print("STAGE:6:START", flush=True)
+    for rc in retrieved_candidates:
+        rc["evidence_score"] = evidence_engine.score(rc["candidate"])
+    print("STAGE:6:END", flush=True)
 
-    with PipelineStage(7):
-        for rc in retrieved_candidates:
-            rc["signal_score"] = signal_engine.score(rc["candidate"])
-            rc["role_score"] = role_engine.score(rc["candidate"])
+    print("STAGE:7:START", flush=True)
+    for rc in retrieved_candidates:
+        rc["signal_score"] = signal_engine.score(rc["candidate"])
+        rc["role_score"] = role_engine.score(rc["candidate"])
+    print("STAGE:7:END", flush=True)
 
-    with PipelineStage(8):
-        for rc in retrieved_candidates:
-            rc["integrity_score"] = integrity_engine.score(rc["candidate"])
+    print("STAGE:8:START", flush=True)
+    for rc in retrieved_candidates:
+        rc["integrity_score"] = integrity_engine.score(rc["candidate"])
+    print("STAGE:8:END", flush=True)
 
-    with PipelineStage(9):
-        for rc in retrieved_candidates:
-            rc["final_score"] = ranker.score(
-                semantic_score=rc["semantic_score"],
-                evidence_score=rc["evidence_score"],
-                role_score=rc["role_score"],
-                signal_score=rc["signal_score"],
-                integrity_score=rc["integrity_score"],
-                candidate=rc["candidate"]
-            )
-
-        retrieved_candidates.sort(
-            key=lambda x: x["final_score"],
-            reverse=True
+    print("STAGE:9:START", flush=True)
+    for rc in retrieved_candidates:
+        rc["final_score"] = ranker.score(
+            semantic_score=rc["semantic_score"],
+            evidence_score=rc["evidence_score"],
+            role_score=rc["role_score"],
+            signal_score=rc["signal_score"],
+            integrity_score=rc["integrity_score"],
+            candidate=rc["candidate"]
         )
 
-        top100 = retrieved_candidates[:100]
+    retrieved_candidates.sort(
+        key=lambda x: x["final_score"],
+        reverse=True
+    )
+
+    top100 = retrieved_candidates[:100]
+    print("STAGE:9:END", flush=True)
 
     rows = []
 
-    with PipelineStage(10):
-        for rank, row in enumerate(
-            top100,
-            start=1
-        ):
+    print("STAGE:10:START", flush=True)
+    for rank, row in enumerate(
+        top100,
+        start=1
+    ):
 
-            candidate = row["candidate"]
+        candidate = row["candidate"]
 
-            reasoning = reason_generator.generate(
-                candidate,
-                row["role_score"],
-                row["evidence_score"],
-                row["signal_score"]
-            )
+        reasoning = reason_generator.generate(
+            candidate,
+            row["role_score"],
+            row["evidence_score"],
+            row["signal_score"]
+        )
 
-            rows.append({
-                "candidate_id": candidate["candidate_id"],
-                "rank": rank,
-                "score": row["final_score"],
-                "reasoning": reasoning
-            })
+        rows.append({
+            "candidate_id": candidate["candidate_id"],
+            "rank": rank,
+            "score": row["final_score"],
+            "reasoning": reasoning
+        })
+    print("STAGE:10:END", flush=True)
 
     submission = pd.DataFrame(rows)
 
@@ -213,11 +182,12 @@ def main():
     assert submission["candidate_id"].nunique() == 100
     assert submission["rank"].tolist() == list(range(1, 101))
 
-    with PipelineStage(11):
-        submission.to_csv(
-            args.out,
-            index=False
-        )
+    print("STAGE:11:START", flush=True)
+    submission.to_csv(
+        args.out,
+        index=False
+    )
+    print("STAGE:11:END", flush=True)
 
 
 if __name__ == "__main__":

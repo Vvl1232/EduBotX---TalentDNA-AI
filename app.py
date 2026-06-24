@@ -745,38 +745,6 @@ div[data-testid="stDataFrame"] > div {
     from { opacity: 0; transform: translateX(-16px); }
     to   { opacity: 1; transform: translateX(0);     }
 }
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-.nav-link.active-nav {
-    color: #4f46e5;
-    position: relative;
-}
-.nav-link.active-nav::after {
-    content: '';
-    position: absolute;
-    bottom: -4px; left: 0; right: 0; height: 2px;
-    background: #4f46e5; border-radius: 2px;
-}
-.animate-on-scroll {
-    opacity: 0;
-    transform: translateY(20px);
-    transition: opacity 0.6s ease-out, transform 0.6s ease-out;
-}
-.animate-on-scroll.is-visible {
-    opacity: 1;
-    transform: translateY(0);
-}
-.fade-in-results {
-    animation: fadeIn 1s ease-in-out both;
-}
-.error-card {
-    background: rgba(239,68,68,.05); border: 1px solid rgba(239,68,68,.2);
-    border-radius: 12px; padding: 1.5rem; margin-top: 1.5rem;
-}
-.error-title { color: #ef4444; font-weight: 700; font-size: 1.1rem; margin-bottom: .5rem; }
-.error-details { color: #475569; font-size: 0.95rem; font-family: 'JetBrains Mono', monospace; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -1147,13 +1115,6 @@ if run_clicked or run_requested:
         """,
         height=0,
     )
-    init_slot = st.empty()
-    init_slot.markdown(
-        f'<div style="font-weight: 600; color: #4f46e5; text-align: center; margin: 1rem 0; font-size: 1.1rem;">'
-        f'<div class="spinner-inline" style="margin-right: 10px;"></div>Initializing TalentDNA AI Pipeline...</div>',
-        unsafe_allow_html=True
-    )
-
     prog_slot = st.empty()
     states = ["pending"] * len(_BENCH_STEPS)
     prog_slot.markdown(_render_pipeline_state(states), unsafe_allow_html=True)
@@ -1173,25 +1134,13 @@ if run_clicked or run_requested:
     )
 
     current_stage = -1
-    first_output = True
-    captured_error = None
-    captured_tb = None
-    
     while True:
         line = process.stdout.readline()
-        if first_output and line:
-            init_slot.empty()
-            first_output = False
-            
         if not line and process.poll() is not None:
             break
         if line:
             line_str = line.strip()
-            if line_str.startswith("LOG:"):
-                print(line_str)
-            elif line_str.startswith("TRACEBACK:"):
-                captured_tb = line_str.split("TRACEBACK:", 1)[1]
-            elif line_str.startswith("STAGE:"):
+            if line_str.startswith("STAGE:"):
                 parts = line_str.split(":")
                 if len(parts) >= 3:
                     stage_num = int(parts[1]) - 1
@@ -1202,11 +1151,6 @@ if run_clicked or run_requested:
                         current_stage = stage_num
                     elif action == "END":
                         states[stage_num] = "completed"
-                    elif action == "ERROR":
-                        states[stage_num] = "failed"
-                        err_type = parts[3] if len(parts) > 3 else "Unknown"
-                        err_msg = ":".join(parts[4:]) if len(parts) > 4 else ""
-                        captured_error = {"stage": stage_num + 1, "type": err_type, "msg": err_msg}
                     
                     prog_slot.markdown(_render_pipeline_state(states), unsafe_allow_html=True)
             else:
@@ -1219,30 +1163,15 @@ if run_clicked or run_requested:
         elif len(states) > 0:
             states[0] = "failed"
         
-        if captured_error and captured_tb:
-            tb_html = captured_tb.replace('<br>', '\n')
-            err_html = f"""
-            <div class="error-card">
-              <div class="error-title">Stage {captured_error['stage']} Failed: {captured_error['type']}</div>
-              <div class="error-details">{captured_error['msg']}</div>
-              <details style="margin-top: 1rem; cursor: pointer;">
-                <summary style="font-weight: 600; color: #ef4444;">View Full Traceback</summary>
-                <pre style="background: rgba(0,0,0,0.05); padding: 1rem; border-radius: 8px; margin-top: 0.5rem; font-size: 0.85rem; overflow-x: auto;">{tb_html}</pre>
-              </details>
-            </div>
-            """
-            prog_slot.markdown(_render_pipeline_state(states, f"Stage {captured_error['stage']} failed."), unsafe_allow_html=True)
-            st.markdown(err_html, unsafe_allow_html=True)
-        else:
-            err_msg = "<br>".join(error_output[-5:])
-            prog_slot.markdown(_render_pipeline_state(states, err_msg), unsafe_allow_html=True)
-            st.markdown(f'<div class="error-card"><div class="error-title">System Error Detected</div><div class="error-details">{err_msg}</div><div style="margin-top:1rem;color:#334155;">Please verify dataset paths or contact support.</div></div>', unsafe_allow_html=True)
+        err_msg = "<br>".join(error_output[-5:])
+        prog_slot.markdown(_render_pipeline_state(states, err_msg), unsafe_allow_html=True)
+        st.error("Pipeline execution failed due to an error.")
     else:
         loading_slot = st.empty()
         messages = [
-            "Generating Ranked Results...",
-            "Preparing Candidate Insights...",
-            "Loading Dashboard..."
+            "Loading Results...",
+            "Preparing Ranked Candidate Output...",
+            "Building Explainability Dashboard..."
         ]
         
         for msg in messages:
@@ -1396,73 +1325,4 @@ st.markdown(
 </div>
 """,
     unsafe_allow_html=True,
-)
-
-st.components.v1.html(
-    """
-    <script>
-    document.addEventListener("DOMContentLoaded", function() {
-        const sections = window.parent.document.querySelectorAll('div[id]');
-        const navLinks = window.parent.document.querySelectorAll('.nav-link');
-        
-        const observerOptions = { root: null, rootMargin: '0px', threshold: 0.5 };
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    const id = entry.target.getAttribute('id');
-                    navLinks.forEach(link => {
-                        link.classList.remove('active-nav');
-                        if (link.getAttribute('href') === '#' + id) {
-                            link.classList.add('active-nav');
-                        }
-                    });
-                }
-            });
-        }, observerOptions);
-        
-        sections.forEach(sec => observer.observe(sec));
-        
-        const animObserver = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('is-visible');
-                }
-            });
-        }, { threshold: 0.1 });
-        
-        const applyAnimations = () => {
-            window.parent.document.querySelectorAll('.bench-card, .sec-head, .problem-card, .innov-card, .stat-card, .success-banner, .error-card, div[data-testid="stDataFrame"]').forEach(el => {
-                if (!el.classList.contains('animate-on-scroll')) {
-                    el.classList.add('animate-on-scroll');
-                    animObserver.observe(el);
-                }
-            });
-        };
-        applyAnimations();
-        
-        const buttons = window.parent.document.querySelectorAll('button[kind="primary"]');
-        buttons.forEach(btn => {
-            btn.addEventListener('click', function(e) {
-                const bench = window.parent.document.getElementById('benchmark-results');
-                if (bench) {
-                    bench.scrollIntoView({behavior: "smooth"});
-                }
-                
-                btn.style.opacity = '0.5';
-                btn.style.pointerEvents = 'none';
-                
-                setTimeout(() => applyAnimations(), 2000);
-            });
-        });
-        
-        const mutationObserver = new MutationObserver((mutations) => {
-            let shouldApply = false;
-            mutations.forEach(m => { if (m.addedNodes.length > 0) shouldApply = true; });
-            if (shouldApply) applyAnimations();
-        });
-        mutationObserver.observe(window.parent.document.body, { childList: true, subtree: true });
-    });
-    </script>
-    """,
-    height=0,
 )
