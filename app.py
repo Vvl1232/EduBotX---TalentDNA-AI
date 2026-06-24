@@ -178,7 +178,7 @@ div[data-testid="stButton"] button[kind="primary"]:hover {
     justify-content: center;
     gap: 1.0rem;
     flex-wrap: wrap;
-    margin-bottom: 2.25rem;
+    margin-bottom: 0.75rem;
 }
 .hero-chip {
     background: rgba(255,255,255,.6);
@@ -1382,7 +1382,7 @@ with pl2:
     viewer_url = f"https://docs.google.com/viewer?url={urllib.parse.quote(raw_url, safe='')}&embedded=true"
     
 
-modal_html = f"""
+    modal_html = f"""
 <!-- Methodology PDF Button -->
 <a href="{viewer_url}" target="_blank" rel="noopener noreferrer" onclick="return handlePdfClick(event, this.href);" style="text-decoration:none;">
     <button style="width:100%;padding:14px;border-radius:12px;background:linear-gradient(135deg,#ef4444,#b91c1c);color:white;border:none;font-weight:700;cursor:pointer; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(239, 68, 68, 0.3)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
@@ -1438,7 +1438,7 @@ function closePdfModal() {{
 }}
 </script>
 """
-st.markdown(modal_html, unsafe_allow_html=True)
+    st.markdown(modal_html, unsafe_allow_html=True)
 
 # ──────────────────────────────────────────────────────────────────
 # TEAM EDUBOTX
