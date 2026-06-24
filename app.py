@@ -1135,19 +1135,19 @@ if run_clicked or run_requested:
     # Reset the flag immediately to prevent loops on output interactions
     st.session_state.run_analysis = False
     
-    if run_requested:
-        # Only scroll if the top button was clicked. The bottom button is already in view.
-        st.components.v1.html(
-            """
-            <script>
-                setTimeout(function() {
-                    var el = window.parent.document.getElementById("benchmark");
-                    if (el) { el.scrollIntoView({behavior: "smooth", block: "start"}); }
-                }, 300);
-            </script>
-            """,
-            height=0,
-        )
+    # We scroll for both buttons.
+    # The block="start" ensures it aligns to Pipeline Demonstration perfectly.
+    st.components.v1.html(
+        """
+        <script>
+            setTimeout(function() {
+                var el = window.parent.document.getElementById("benchmark");
+                if (el) { el.scrollIntoView({behavior: "smooth", block: "start"}); }
+            }, 300);
+        </script>
+        """,
+        height=0,
+    )
         
     init_slot = st.empty()
     init_slot.markdown(
