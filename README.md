@@ -1,152 +1,171 @@
 # TalentDNA AI
 
-TalentDNA AI is an intelligent candidate discovery and ranking engine developed for the Redrob AI Hiring Challenge. The system evaluates a pool of 100,000 candidate profiles against a target job description and produces a ranked Top 100 shortlist using semantic retrieval, role intelligence, evidence-based scoring, platform signals, integrity validation, and explainable AI reasoning.
+TalentDNA AI is an AI-powered candidate discovery and ranking system designed specifically for the Redrob AI Hiring Challenge. The system evaluates candidates against a target job description to produce a highly relevant, ranked Top 100 shortlist complete with explainable reasoning. 
+
+To achieve scalable and accurate candidate assessment, TalentDNA AI uses a multi-stage pipeline encompassing semantic retrieval, role intelligence, evidence matching, recruiter signals, and integrity validation. This architecture allows the system to process massive datasets efficiently while providing deep, contextual insights into every candidate match.
 
 ---
 
-# Key Features
+# Live Demo
 
-* Semantic Candidate Retrieval using FAISS
-* Job Description Intent Understanding
-* Role Intelligence Scoring
-* Evidence-Based Skill Matching
-* Candidate Integrity Validation
-* Explainable Ranking Reasons
-* Retrieval-First Memory Optimized Architecture
-* Interactive Streamlit Evaluation Dashboard
+* **Streamlit Application:** [https://edubotx---talentdna-ai-3kvf2fpehcgrstgtqicpuh.streamlit.app](https://edubotx---talentdna-ai-3kvf2fpehcgrstgtqicpuh.streamlit.app)
+* **GitHub Repository:** [https://github.com/Vvl1232/EduBotX---TalentDNA-AI](https://github.com/Vvl1232/EduBotX---TalentDNA-AI)
 
 ---
 
 # System Architecture
 
 ```text
-100K Candidate Dataset
-        │
-        ▼
-Embedding Index (FAISS)
-        │
-        ▼
-JD Understanding & Intent Extraction
-        │
-        ▼
-Semantic Retrieval (Top 1000)
-        │
-        ▼
-Candidate Parsing & Career Feature Extraction
-        │
-        ▼
-Scoring Engines
-    ├── Role Intelligence
-    ├── Evidence Match
-    ├── Platform Signals
-    └── Integrity Engine
-        │
-        ▼
-Hybrid Ranking Engine
-        │
-        ▼
-Top 100 Candidates
-        │
-        ▼
-Explainability & Candidate Insights
++-------------------+
+|  100K Candidates  |
++-------------------+
+          |
+          v
++-------------------+
+|  Embedding Index  |
++-------------------+
+          |
+          v
++-------------------+
+|  FAISS Retrieval  |
++-------------------+
+          |
+          v
++-------------------+
+| Candidate Parsing |
++-------------------+
+          |
+          v
++-------------------+
+|  Career Feature   |
+|    Extraction     |
++-------------------+
+          |
+          v
++-------------------+
+|  Scoring Engines  |
++-------------------+
+          |
+          v
++-------------------+
+|   Hybrid Ranker   |
++-------------------+
+          |
+          v
++-------------------+
+|  Top 100 Output   |
++-------------------+
 ```
 
 ---
 
-# Retrieval-First Optimization
+# Retrieval-First Architecture
 
-TalentDNA AI uses a retrieval-first architecture for scalability.
+The system searches the full 100,000-candidate pool.
 
-Instead of parsing and processing all 100,000 candidates before ranking, the system:
+Candidate embeddings and the FAISS index are precomputed once and stored as artifacts. 
 
-1. Searches the complete 100K candidate pool using a FAISS vector index.
-2. Retrieves the most relevant candidate subset.
-3. Performs detailed feature extraction and scoring only on retrieved candidates.
-4. Produces identical ranking results while significantly reducing memory consumption and execution time.
+At runtime:
+1. The job description is embedded.
+2. FAISS searches the entire candidate pool.
+3. The most relevant candidates are retrieved.
+4. Detailed scoring is performed only on retrieved candidates.
 
-This optimization preserves ranking correctness while enabling efficient deployment in constrained environments.
+This optimization preserves ranking results while significantly reducing memory usage and runtime.
 
 ---
 
-# Project Structure
+# Large Dataset & Precomputed Artifacts
+
+The repository relies on the following key data files tracked via Git LFS:
+* `data/raw/candidates.jsonl`
+* `notebooks/candidate_embeddings.npy`
+* `notebooks/candidate_index.faiss`
+
+`candidates.jsonl` contains the challenge dataset. `candidate_embeddings.npy` contains precomputed embeddings for candidate profiles. `candidate_index.faiss` contains the FAISS vector index.
+
+Git LFS is required because these files are several hundred megabytes in size. These files are generated from the challenge dataset and are included to avoid recomputing embeddings for every execution. 
+
+The job description embedding is generated at runtime.
+
+---
+
+# Repository Structure
 
 ```text
-TalentDNA_AI/
-
+.
 ├── .streamlit/
-│
+│   └── config.toml
 ├── data/
 │   └── raw/
 │       ├── candidates.jsonl
-│       ├── candidate_schema.json
 │       ├── job_description.docx
-│       ├── redrob_signals_doc.docx
-│       ├── sample_candidates.json
-│       ├── sample_submission.csv
 │       ├── submission_metadata.yaml
-│       ├── submission_spec.docx
 │       └── validate_submission.py
-│
 ├── notebooks/
+│   ├── 14_end_to_end_pipeline.ipynb
 │   ├── candidate_embeddings.npy
 │   └── candidate_index.faiss
-│
 ├── src/
-│   ├── parser.py
 │   ├── career_features.py
-│   ├── jd_parser.py
-│   ├── jd_intent.py
+│   ├── config.py
 │   ├── embeddings.py
-│   ├── retrieval.py
 │   ├── evidence_match.py
-│   ├── role_intelligence.py
-│   ├── signals.py
+│   ├── explainability.py
 │   ├── integrity_engine.py
+│   ├── jd_intent.py
+│   ├── jd_parser.py
+│   ├── parser.py
 │   ├── ranker.py
 │   ├── reason_generator.py
-│   ├── explainability.py
-│   └── config.py
-│
+│   ├── retrieval.py
+│   ├── role_intelligence.py
+│   └── signals.py
 ├── app.py
 ├── rank.py
 ├── requirements.txt
 ├── runtime.txt
 ├── submission.csv
 ├── submission_metadata.yaml
-├── TalentDNA AI - Methodology.pdf
-└── README.md
+└── TalentDNA AI - Methodology.pdf
 ```
 
 ---
 
-# Scoring Components
+# Local Reproduction Guide
 
-| Component             | Purpose                                            |
-| --------------------- | -------------------------------------------------- |
-| Semantic Retrieval    | Candidate relevance to job description             |
-| Role Intelligence     | Role and title alignment                           |
-| Evidence Match        | Verified skill and keyword evidence                |
-| Platform Signals      | Candidate engagement indicators                    |
-| Integrity Engine      | Fraud, honeypot, and low-quality profile detection |
-| Explainability Engine | Human-readable ranking justification               |
+**Step 1:**
+```bash
+git clone https://github.com/Vvl1232/EduBotX---TalentDNA-AI.git
+cd EduBotX---TalentDNA-AI
+```
 
----
+**Step 2:**
+```bash
+git lfs install
+git lfs pull
+```
+This downloads `candidates.jsonl`, `candidate_embeddings.npy`, and `candidate_index.faiss`.
 
-# Installation
-
+**Step 3:**
 ```bash
 pip install -r requirements.txt
 ```
 
----
-
-# Running the Ranking Pipeline
-
+**Step 4:**
+Run ranking:
 ```bash
-python rank.py \
---candidates data/raw/candidates.jsonl \
---jd job_description.docx \
---out submission.csv
+python rank.py --candidates data/raw/candidates.jsonl --jd data/raw/job_description.docx --out submission.csv
+```
+
+**Step 5:**
+Validate:
+```bash
+python data/raw/validate_submission.py submission.csv
+```
+Expected output:
+```
+Submission format is VALID.
 ```
 
 ---
@@ -156,40 +175,45 @@ python rank.py \
 ```bash
 streamlit run app.py
 ```
+The Streamlit demo uses the same ranking pipeline and retrieval system locally as it does in the cloud.
 
 ---
 
-# Output
+# Scoring Components
 
-The system generates:
+* **Semantic Retrieval:** Uses FAISS to perform vector similarity searches across candidate embeddings.
+* **Role Intelligence:** Maps candidate skills and job titles directly to the core requirements of the job description.
+* **Evidence Match:** Extracts and validates concrete professional experiences demonstrating required competencies.
+* **Recruiter Signals:** Analyzes tenure, promotion trajectory, and overall career progression.
+* **Integrity Engine:** Filters out profiles with anomalous data, such as impossible timelines or missing foundational details.
+* **Explainability Engine:** Generates transparent, human-readable rationales for why each candidate was selected.
 
-```text
-submission.csv
-```
+---
 
-containing the final ranked Top 100 candidates.
+# Performance
 
-Validation can be performed using:
-
-```bash
-python data/raw/validate_submission.py submission.csv
-```
+* Full candidate search space: 100,000 candidates
+* Retrieval engine: FAISS
+* CPU-only execution
+* Retrieval-first memory optimization
+* Designed to execute well within challenge runtime requirements
 
 ---
 
 # Deliverables
 
 * Source Code
-* Streamlit Application - https://edubotx---talentdna-ai-3kvf2fpehcgrstgtqicpuh.streamlit.app/
-* Methodology Document
-* Submission CSV
-* Submission Metadata
-* Reproducible Ranking Pipeline
+* Streamlit Application
+* Methodology PDF
+* `submission.csv`
+* `submission_metadata.yaml`
 
 ---
 
 # Team
 
-EduBotX
+**EduBotX**
 
-Redrob AI Hiring Challenge Submission
+* Vinit Limkar — Team Lead / AIML Engineer
+* Sarah Khambatta — DevOps & Full Stack
+* Shreyash Date — Full Stack Developer
