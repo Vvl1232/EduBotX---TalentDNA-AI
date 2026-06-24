@@ -1366,18 +1366,9 @@ with pl1:
         '</button></a>', 
         unsafe_allow_html=True
     )
-import urllib.parse
-import requests
-
-@st.cache_data(ttl=3600)
-def check_pdf_reachable(url):
-    try:
-        resp = requests.head(url, allow_redirects=True, timeout=5)
-        return resp.status_code == 200
-    except:
-        return False
-
 with pl2:
+    import urllib.parse
+    
     repo_owner = "Vvl1232"
     repo_name = "EduBotX---TalentDNA-AI"
     pdf_filename = "TalentDNA AI - Methodology.pdf"
@@ -1388,68 +1379,64 @@ with pl2:
     # Wrap in Google Docs Viewer to ensure native browser rendering with zoom/scroll and NO downloads
     viewer_url = f"https://docs.google.com/viewer?url={urllib.parse.quote(raw_url, safe='')}&embedded=true"
     
-    if check_pdf_reachable(raw_url):
-        modal_html = f"""
-        <!-- Methodology PDF Button -->
-        <a href="{viewer_url}" target="_blank" rel="noopener noreferrer" onclick="return handlePdfClick(event, this.href);" style="text-decoration:none;">
-            <button style="width:100%;padding:14px;border-radius:12px;background:linear-gradient(135deg,#ef4444,#b91c1c);color:white;border:none;font-weight:700;cursor:pointer; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(239, 68, 68, 0.3)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
-                Methodology PDF
-            </button>
-        </a>
-        
-        <!-- Fallback Modal Viewer -->
-        <div id="pdf-modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.85); z-index:999999; opacity:0; transition:opacity 0.3s ease; align-items:center; justify-content:center; flex-direction:column;">
-            <div style="width:100%; max-width:1200px; height:90vh; background:white; border-radius:12px; overflow:hidden; position:relative; display:flex; flex-direction:column; box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);">
-                <div style="padding:16px 24px; background:#f8fafc; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
-                    <h3 style="margin:0; font-family:Inter,sans-serif; color:#0f172a; font-size:1.1rem; font-weight:600;">Methodology PDF Viewer</h3>
-                    <button onclick="closePdfModal()" style="background:#ef4444; color:white; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600; transition:background 0.2s;" onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'">Close</button>
-                </div>
-                <div style="flex-grow:1; position:relative; overflow:hidden;">
-                    <iframe id="pdf-iframe" style="width:100%; height:100%; border:none; overflow:auto;" src="about:blank"></iframe>
-                </div>
-            </div>
+
+modal_html = f"""
+<!-- Methodology PDF Button -->
+<a href="{viewer_url}" target="_blank" rel="noopener noreferrer" onclick="return handlePdfClick(event, this.href);" style="text-decoration:none;">
+    <button style="width:100%;padding:14px;border-radius:12px;background:linear-gradient(135deg,#ef4444,#b91c1c);color:white;border:none;font-weight:700;cursor:pointer; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(239, 68, 68, 0.3)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+        Methodology PDF
+    </button>
+</a>
+
+<!-- Fallback Modal Viewer -->
+<div id="pdf-modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.85); z-index:999999; opacity:0; transition:opacity 0.3s ease; align-items:center; justify-content:center; flex-direction:column;">
+    <div style="width:100%; max-width:1200px; height:90vh; background:white; border-radius:12px; overflow:hidden; position:relative; display:flex; flex-direction:column; box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);">
+        <div style="padding:16px 24px; background:#f8fafc; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="margin:0; font-family:Inter,sans-serif; color:#0f172a; font-size:1.1rem; font-weight:600;">Methodology PDF Viewer</h3>
+            <button onclick="closePdfModal()" style="background:#ef4444; color:white; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600; transition:background 0.2s;" onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'">Close</button>
         </div>
-        
-        <!-- JavaScript Logic -->
-        <script>
-        function handlePdfClick(e, url) {{
-            // Attempt to open the new tab
-            var newTab = window.open(url, "_blank", "noopener,noreferrer");
-            
-            // Fallback: If popup is blocked or fails to open
-            if (!newTab || newTab.closed || typeof newTab.closed === 'undefined') {{
-                e.preventDefault();
-                openPdfModal(url);
-                return false;
-            }}
-            return true;
-        }}
-        
-        function openPdfModal(url) {{
-            var modal = document.getElementById("pdf-modal");
-            var iframe = document.getElementById("pdf-iframe");
-            iframe.src = url;
-            modal.style.display = "flex";
-            // Trigger reflow for smooth fade-in animation
-            void modal.offsetWidth;
-            modal.style.opacity = "1";
-        }}
-        
-        function closePdfModal() {{
-            var modal = document.getElementById("pdf-modal");
-            modal.style.opacity = "0";
-            setTimeout(function() {{
-                modal.style.display = "none";
-                document.getElementById("pdf-iframe").src = "about:blank"; // Stop background rendering
-            }}, 300);
-        }}
-        </script>
-        """
-        st.markdown(modal_html, unsafe_allow_html=True)
-    else:
-        st.error("Error: The Methodology PDF could not be loaded from the GitHub repository.")
-        if st.button("Retry Loading PDF", use_container_width=True):
-            st.rerun()
+        <div style="flex-grow:1; position:relative; overflow:hidden;">
+            <iframe id="pdf-iframe" style="width:100%; height:100%; border:none; overflow:auto;" src="about:blank"></iframe>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript Logic -->
+<script>
+function handlePdfClick(e, url) {{
+    // Attempt to open the new tab
+    var newTab = window.open(url, "_blank", "noopener,noreferrer");
+    
+    // Fallback: If popup is blocked or fails to open
+    if (!newTab || newTab.closed || typeof newTab.closed === 'undefined') {{
+        e.preventDefault();
+        openPdfModal(url);
+        return false;
+    }}
+    return true;
+}}
+
+function openPdfModal(url) {{
+    var modal = document.getElementById("pdf-modal");
+    var iframe = document.getElementById("pdf-iframe");
+    iframe.src = url;
+    modal.style.display = "flex";
+    // Trigger reflow for smooth fade-in animation
+    void modal.offsetWidth;
+    modal.style.opacity = "1";
+}}
+
+function closePdfModal() {{
+    var modal = document.getElementById("pdf-modal");
+    modal.style.opacity = "0";
+    setTimeout(function() {{
+        modal.style.display = "none";
+        document.getElementById("pdf-iframe").src = "about:blank"; // Stop background rendering
+    }}, 300);
+}}
+</script>
+"""
+st.markdown(modal_html, unsafe_allow_html=True)
 
 # ──────────────────────────────────────────────────────────────────
 # TEAM EDUBOTX
