@@ -1367,8 +1367,13 @@ with pl1:
         unsafe_allow_html=True
     )
 with pl2:
+    import urllib.parse
+    pdf_filename = "TalentDNA AI - Methodology.pdf"
+    # Streamlit serves files from the 'static' folder at '/app/static/' or 'app/static/'
+    pdf_url = f"app/static/{urllib.parse.quote(pdf_filename)}"
+    
     st.markdown(
-        '<a href="#" target="_blank">'
+        f'<a href="{pdf_url}" target="_blank" rel="noopener noreferrer">'
         '<button style="width:100%;padding:14px;border-radius:12px;background:linear-gradient(135deg,#ef4444,#b91c1c);color:white;border:none;font-weight:700;cursor:pointer;">'
         'Methodology PDF'
         '</button></a>', 
