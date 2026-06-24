@@ -1135,6 +1135,20 @@ if run_clicked or run_requested:
     # Reset the flag immediately to prevent loops on output interactions
     st.session_state.run_analysis = False
     
+    if run_requested:
+        # Only scroll if the top button was clicked. The bottom button is already in view.
+        st.components.v1.html(
+            """
+            <script>
+                setTimeout(function() {
+                    var el = window.parent.document.getElementById("benchmark");
+                    if (el) { el.scrollIntoView({behavior: "smooth", block: "start"}); }
+                }, 300);
+            </script>
+            """,
+            height=0,
+        )
+        
     init_slot = st.empty()
     init_slot.markdown(
         f'<div style="font-weight: 600; color: #4f46e5; text-align: center; margin: 1rem 0; font-size: 1.1rem;">'
