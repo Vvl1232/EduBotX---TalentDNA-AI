@@ -1,8 +1,15 @@
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+
 import json
 import argparse
 import pandas as pd
 import numpy as np
 import faiss
+faiss.omp_set_num_threads(1)
 from docx import Document
 import time
 import tracemalloc
@@ -110,17 +117,31 @@ def main():
         )
 
     with PipelineStage(5):
-        index = faiss.read_index(
-            "notebooks/candidate_index.faiss"
-        )
-        scores, indices = index.search(
-            np.array(
-                [jd_embedding],
-                dtype=np.float32
-            ),
-            1000
-        )
-        print(f"LOG:Retrieved {len(indices[0])} candidates via FAISS", flush=True)
+        try:
+            idx_path = "notebooks/candidate_index.faiss"
+            if os.path.getsize(idx_path) < 1024:
+                raise RuntimeError(
+                    "FAISS index file is too small (likely a Git LFS pointer). "
+                    "Ensure Git LFS is properly pulling files in the deployment environment."
+                )
+                
+            index = faiss.read_index(
+                idx_path,
+                faiss.IO_FLAG_MMAP
+            )
+            scores, indices = index.search(
+                np.array(
+                    [jd_embedding],
+                    dtype=np.float32
+                ),
+                1000
+            )
+            print(f"LOG:Retrieved {len(indices[0])} candidates via FAISS", flush=True)
+        except Exception as e:
+            with open("debug_faiss.log", "w") as f:
+                import traceback
+                f.write(traceback.format_exc())
+            raise
 
     role_engine = RoleIntelligenceEngine()
     evidence_engine = EvidenceMatchEngine()

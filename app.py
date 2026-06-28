@@ -1179,6 +1179,7 @@ if run_clicked or run_requested:
     first_output = True
     captured_error = None
     captured_tb = None
+    last_ui_update = 0
     
     while True:
         line = process.stdout.readline()
@@ -1211,7 +1212,12 @@ if run_clicked or run_requested:
                         err_msg = ":".join(parts[4:]) if len(parts) > 4 else ""
                         captured_error = {"stage": stage_num + 1, "type": err_type, "msg": err_msg}
                     
-                    prog_slot.markdown(_render_pipeline_state(states), unsafe_allow_html=True)
+                    # Debounce UI updates to prevent scrolling glitches
+                    import time
+                    now = time.time()
+                    if action == "ERROR" or (now - last_ui_update) > 0.1:
+                        prog_slot.markdown(_render_pipeline_state(states), unsafe_allow_html=True)
+                        last_ui_update = now
             else:
                 if line_str:
                     error_output.append(line_str)
