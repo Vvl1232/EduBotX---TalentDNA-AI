@@ -125,10 +125,11 @@ def main():
                     "Ensure Git LFS is properly pulling files in the deployment environment."
                 )
                 
-            index = faiss.read_index(
-                idx_path,
-                faiss.IO_FLAG_MMAP
-            )
+            import platform
+            if platform.system() == "Linux":
+                index = faiss.read_index(idx_path, faiss.IO_FLAG_MMAP)
+            else:
+                index = faiss.read_index(idx_path)
             scores, indices = index.search(
                 np.array(
                     [jd_embedding],
