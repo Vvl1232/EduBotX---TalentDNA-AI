@@ -24,6 +24,7 @@ Thumbs.db
 
 # Large precomputed files
 *.npy
+!notebooks/candidate_embeddings.npy
 
 # Temporary audit/benchmark outputs
 *.log

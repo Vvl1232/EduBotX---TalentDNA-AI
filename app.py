@@ -4,6 +4,7 @@ import subprocess
 import time
 import os
 import sys
+import re
 
 # ──────────────────────────────────────────────────────────────────
 # PAGE CONFIG
@@ -1279,10 +1280,507 @@ if st.session_state.get("pipeline_complete", False):
             '<div class="sec-head" style="margin-top:2.25rem">🔍 Candidate Drill Down<div class="sh-line"></div></div>',
             unsafe_allow_html=True,
         )
-        selected_cand = st.selectbox("Select Candidate to view reasoning:", df.head(10)["candidate_id"].tolist())
+        selected_cand = st.selectbox("Select Candidate to view reasoning:", df["candidate_id"].tolist())
+
+        # ──────────────────────────────────────────────────────────
+        # COMPARISON HELPER FUNCTIONS (UI-only, zero backend coupling)
+        # ──────────────────────────────────────────────────────────
+
+        def _normalize_pct(val):
+            """Convert a raw score value to a 0-100 percentage for bar display."""
+            if val > 100:
+                return min(100, max(0, (val / 1000) * 100))
+            elif val > 1:
+                return min(100, max(0, val))
+            else:
+                return min(100, max(0, val * 100))
+
+        def _build_comparison_bullets(row_higher, row_lower, columns):
+            """Generate recruiter-friendly bullet points from score deltas.
+
+            Only mentions dimensions where the higher-ranked candidate scores
+            better. Equal or unavailable dimensions are silently skipped.
+            """
+            bullet_map = {
+                'semantic_score': '✓ Stronger semantic alignment with the Job Description',
+                'role_alignment_score': '✓ Higher role relevance and alignment',
+                'evidence_match_score': '✓ Stronger evidence supporting required skills',
+                'behavioral_score': '✓ Better recruiter engagement signals',
+                'integrity_score': '✓ Higher profile integrity score',
+            }
+            bullets = []
+            for col, msg in bullet_map.items():
+                if col in columns:
+                    val_higher = float(row_higher[col])
+                    val_lower = float(row_lower[col])
+                    if val_higher > val_lower:
+                        bullets.append(msg)
+            return bullets
+
+        def _parse_reasoning(reasoning_text):
+            """Parse reasoning text into a list of individual reason sentences."""
+            text = str(reasoning_text).strip()
+            if text.endswith('.'):
+                text = text[:-1]
+            sentences = [s.strip().capitalize() for s in text.split('. ') if s.strip()]
+            return sentences
+
+        def _classify_reason(sentence):
+            """Classify a reason sentence into a category for comparison."""
+            s = sentence.lower()
+            if 'years experience' in s or 'years' in s and 'experience' in s:
+                return 'experience'
+            elif 'retrieval' in s and 'expertise' in s:
+                return 'retrieval_skills'
+            elif 'applied ml' in s or 'ml experience' in s:
+                return 'ml_skills'
+            elif 'very strong alignment' in s:
+                return 'alignment_very_strong'
+            elif 'strong alignment' in s:
+                return 'alignment_strong'
+            elif 'partially aligned' in s:
+                return 'alignment_partial'
+            elif 'multiple signals of production' in s:
+                return 'evidence_high'
+            elif 'relevant ai' in s and 'evidence' in s:
+                return 'evidence_medium'
+            elif 'relevant engineering evidence' in s:
+                return 'evidence_low'
+            elif 'excellent recruiter' in s:
+                return 'recruiter_excellent'
+            elif 'strong recruiter' in s:
+                return 'recruiter_strong'
+            elif 'reasonable recruiter' in s:
+                return 'recruiter_reasonable'
+            elif 'skill portfolio' in s:
+                return 'skill_portfolio'
+            elif 'production engineering' in s:
+                return 'production_bg'
+            elif 'below ideal experience' in s:
+                return 'exp_warning_low'
+            elif 'more senior than' in s:
+                return 'exp_warning_high'
+            return 'other'
+
+        # Category groupings for comparison
+        _ALIGNMENT_LEVELS = {
+            'alignment_very_strong': 3,
+            'alignment_strong': 2,
+            'alignment_partial': 1,
+        }
+        _EVIDENCE_LEVELS = {
+            'evidence_high': 3,
+            'evidence_medium': 2,
+            'evidence_low': 1,
+        }
+        _RECRUITER_LEVELS = {
+            'recruiter_excellent': 3,
+            'recruiter_strong': 2,
+            'recruiter_reasonable': 1,
+        }
+
+        def _build_detailed_comparison(row_a, row_b):
+            """Build a detailed, self-explanatory comparison between two candidates.
+
+            Returns (reasons_a, reasons_b, gaps, shared, missing) where:
+              reasons_a: list of reason sentences for candidate A
+              reasons_b: list of reason sentences for candidate B
+              gaps: list of specific gap explanations (why A is ahead)
+              shared: list of strengths both candidates share
+              missing: list of what candidate B is missing compared to A
+            """
+            reasons_a = _parse_reasoning(row_a.get('reasoning', ''))
+            reasons_b = _parse_reasoning(row_b.get('reasoning', ''))
+
+            classified_a = {_classify_reason(r): r for r in reasons_a}
+            classified_b = {_classify_reason(r): r for r in reasons_b}
+
+            cats_a = set(classified_a.keys())
+            cats_b = set(classified_b.keys())
+
+            gaps = []
+            shared = []
+            missing = []
+
+            # 1. Experience comparison
+            exp_a = classified_a.get('experience', '')
+            exp_b = classified_b.get('experience', '')
+            if exp_a and exp_b:
+                match_a = re.search(r'([\d.]+)\s*years?\s*experience\s+as\s+(.*)', exp_a, re.IGNORECASE)
+                match_b = re.search(r'([\d.]+)\s*years?\s*experience\s+as\s+(.*)', exp_b, re.IGNORECASE)
+                if match_a and match_b:
+                    yrs_a = float(match_a.group(1))
+                    yrs_b = float(match_b.group(1))
+                    title_a = match_a.group(2).strip()
+                    title_b = match_b.group(2).strip()
+                    if yrs_a > yrs_b:
+                        gaps.append(f"✓ More experience: {yrs_a} years (as {title_a}) vs {yrs_b} years (as {title_b})")
+                        missing.append(f"Fewer years of experience ({yrs_b} vs {yrs_a})")
+                    elif yrs_b > yrs_a:
+                        pass  # Will be noted in the "other candidate" section
+                    if title_a.lower() == title_b.lower():
+                        shared.append(f"Both work as {title_a}")
+
+            # 2. Retrieval / ML Skills comparison
+            has_retrieval_a = 'retrieval_skills' in cats_a
+            has_retrieval_b = 'retrieval_skills' in cats_b
+            has_ml_a = 'ml_skills' in cats_a
+            has_ml_b = 'ml_skills' in cats_b
+
+            if has_retrieval_a and not has_retrieval_b:
+                skill_text = classified_a['retrieval_skills']
+                gaps.append(f"✓ Has retrieval/ranking expertise — \"{skill_text}\"")
+                missing.append("Lacks explicit retrieval and ranking expertise")
+                if has_ml_b:
+                    gaps.append(f"✗ Other candidate has general ML experience instead — \"{classified_b['ml_skills']}\"")
+                else:
+                    gaps.append("✗ Other candidate shows no specialized retrieval or ML skills in reasoning")
+            elif has_retrieval_a and has_retrieval_b:
+                shared.append("Both demonstrate retrieval and ranking expertise")
+            elif has_ml_a and not has_ml_b and not has_retrieval_b:
+                gaps.append(f"✓ Has applied ML experience — \"{classified_a['ml_skills']}\"")
+                missing.append("Lacks applied ML experience")
+            elif not has_retrieval_a and not has_ml_a and (has_retrieval_b or has_ml_b):
+                pass  # Other candidate has the skill advantage
+
+            # 3. Alignment level comparison
+            align_a = next((cat for cat in _ALIGNMENT_LEVELS if cat in cats_a), None)
+            align_b = next((cat for cat in _ALIGNMENT_LEVELS if cat in cats_b), None)
+            if align_a and align_b:
+                level_a = _ALIGNMENT_LEVELS[align_a]
+                level_b = _ALIGNMENT_LEVELS[align_b]
+                if level_a > level_b:
+                    gaps.append(f"✓ Stronger role alignment — \"{classified_a[align_a]}\" vs \"{classified_b[align_b]}\"")
+                    missing.append(f"Lower role alignment (has \"{classified_b[align_b]}\")")
+                elif level_a == level_b:
+                    shared.append(f"Same role alignment level — \"{classified_a[align_a]}\"")
+
+            # 4. Evidence level comparison
+            ev_a = next((cat for cat in _EVIDENCE_LEVELS if cat in cats_a), None)
+            ev_b = next((cat for cat in _EVIDENCE_LEVELS if cat in cats_b), None)
+            if ev_a and ev_b:
+                level_a = _EVIDENCE_LEVELS[ev_a]
+                level_b = _EVIDENCE_LEVELS[ev_b]
+                if level_a > level_b:
+                    gaps.append(f"✓ Stronger evidence — \"{classified_a[ev_a]}\" vs \"{classified_b[ev_b]}\"")
+                    missing.append(f"Weaker production evidence (has \"{classified_b[ev_b]}\")")
+                elif level_a == level_b:
+                    shared.append(f"Same production evidence level")
+            elif ev_a and not ev_b:
+                gaps.append(f"✓ Has production evidence — \"{classified_a[ev_a]}\"")
+                missing.append("Lacks explicit production AI/ML evidence")
+
+            # 5. Recruiter signals comparison
+            rec_a = next((cat for cat in _RECRUITER_LEVELS if cat in cats_a), None)
+            rec_b = next((cat for cat in _RECRUITER_LEVELS if cat in cats_b), None)
+            if rec_a and rec_b:
+                level_a = _RECRUITER_LEVELS[rec_a]
+                level_b = _RECRUITER_LEVELS[rec_b]
+                if level_a > level_b:
+                    gaps.append(f"✓ Better recruiter signals — \"{classified_a[rec_a]}\" vs \"{classified_b[rec_b]}\"")
+                    missing.append(f"Weaker recruiter engagement (has \"{classified_b[rec_b]}\")")
+                elif level_a == level_b:
+                    shared.append(f"Same recruiter engagement level")
+
+            # 6. Skill portfolio
+            if 'skill_portfolio' in cats_a and 'skill_portfolio' not in cats_b:
+                gaps.append("✓ Has a strong skill portfolio (other candidate does not)")
+                missing.append("Missing a strong skill portfolio signal")
+            elif 'skill_portfolio' in cats_a and 'skill_portfolio' in cats_b:
+                shared.append("Both have a strong skill portfolio")
+
+            # 7. Experience range warnings
+            if 'exp_warning_low' in cats_b and 'exp_warning_low' not in cats_a:
+                gaps.append("✓ Within ideal experience range (other candidate is slightly below)")
+                missing.append("Flagged as slightly below ideal experience range")
+            if 'exp_warning_high' in cats_b and 'exp_warning_high' not in cats_a:
+                gaps.append("✓ Within ideal experience range (other candidate is above target range)")
+                missing.append("Flagged as being above the ideal target experience range")
+
+            # 8. Score delta
+            score_a = float(row_a['score'])
+            score_b = float(row_b['score'])
+            delta = score_a - score_b
+            if delta > 0:
+                gaps.append(f"✓ Higher composite score: {score_a:.2f} vs {score_b:.2f} (Δ {delta:.2f} points)")
+
+            return reasons_a, reasons_b, gaps, shared, missing
+
+        def _render_comparison_bar(label, val_a, val_b, rank_a, rank_b):
+            """Render a side-by-side signal comparison bar in HTML."""
+            pct_a = _normalize_pct(val_a)
+            pct_b = _normalize_pct(val_b)
+
+            return f"""<div style="margin-bottom: 1.25rem;">
+                <div style="font-size: 0.85rem; font-weight: 700; color: #334155; margin-bottom: 0.5rem;">{label}</div>
+                <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.3rem;">
+                    <span style="font-size: 0.78rem; font-weight: 600; color: #4f46e5; min-width: 55px;">Rank {rank_a}</span>
+                    <div style="flex: 1; height: 8px; background: rgba(99,102,241,.1); border-radius: 999px; overflow: hidden;">
+                        <div style="height: 100%; width: {pct_a}%; background: linear-gradient(90deg, #6366f1, #8b5cf6); border-radius: 999px; transition: width 1s ease-out;"></div>
+                    </div>
+                    <span style="font-size: 0.78rem; font-weight: 700; color: #0f172a; min-width: 48px; text-align: right;">{val_a:.2f}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.6rem;">
+                    <span style="font-size: 0.78rem; font-weight: 600; color: #8b5cf6; min-width: 55px;">Rank {rank_b}</span>
+                    <div style="flex: 1; height: 8px; background: rgba(139,92,246,.1); border-radius: 999px; overflow: hidden;">
+                        <div style="height: 100%; width: {pct_b}%; background: linear-gradient(90deg, #a78bfa, #c4b5fd); border-radius: 999px; transition: width 1s ease-out;"></div>
+                    </div>
+                    <span style="font-size: 0.78rem; font-weight: 700; color: #0f172a; min-width: 48px; text-align: right;">{val_b:.2f}</span>
+                </div>
+            </div>"""
+
+        def _render_full_comparison(row_a, row_b, label_a, label_b, expander_key_suffix=""):
+            """Render the full comparison panel between two candidate rows.
+
+            row_a is the higher-ranked candidate, row_b is the lower-ranked one.
+            """
+            rank_a = int(row_a['rank'])
+            rank_b = int(row_b['rank'])
+            cand_id_a = row_a['candidate_id']
+            cand_id_b = row_b['candidate_id']
+            score_a = float(row_a['score'])
+            score_b = float(row_b['score'])
+            delta = score_a - score_b
+
+            comparison_cols = {
+                'semantic_score': 'Semantic Match',
+                'role_alignment_score': 'Role Intelligence',
+                'evidence_match_score': 'Evidence Match',
+                'behavioral_score': 'Recruiter Signals',
+                'integrity_score': 'Integrity',
+            }
+
+            reasons_a, reasons_b, gaps, shared, missing = _build_detailed_comparison(row_a, row_b)
+
+            # ── Side-by-Side Candidate Cards ──
+            col_left, col_right = st.columns(2)
+            with col_left:
+                st.markdown(
+                    f"""
+                    <div style="background: rgba(99,102,241,.04); border: 1px solid rgba(99,102,241,.18);
+                                border-radius: 14px; padding: 1.1rem 1.25rem;">
+                        <div style="font-size: 0.72rem; font-weight: 700; color: #4f46e5; text-transform: uppercase;
+                                    letter-spacing: 0.06em; margin-bottom: 0.6rem;">{label_a}</div>
+                        <div style="font-size: 1.6rem; font-weight: 900; background: linear-gradient(135deg, #4f46e5, #7c3aed);
+                                    -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.3rem;">#{rank_a}</div>
+                        <div style="font-size: 0.88rem; font-weight: 600; color: #0f172a;">{cand_id_a}</div>
+                        <div style="font-size: 0.8rem; color: #475569; margin-top: 0.2rem;">Score: <strong>{score_a:.2f}</strong></div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            with col_right:
+                st.markdown(
+                    f"""
+                    <div style="background: rgba(139,92,246,.04); border: 1px solid rgba(139,92,246,.18);
+                                border-radius: 14px; padding: 1.1rem 1.25rem;">
+                        <div style="font-size: 0.72rem; font-weight: 700; color: #8b5cf6; text-transform: uppercase;
+                                    letter-spacing: 0.06em; margin-bottom: 0.6rem;">{label_b}</div>
+                        <div style="font-size: 1.6rem; font-weight: 900; background: linear-gradient(135deg, #8b5cf6, #a78bfa);
+                                    -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.3rem;">#{rank_b}</div>
+                        <div style="font-size: 0.88rem; font-weight: 600; color: #0f172a;">{cand_id_b}</div>
+                        <div style="font-size: 0.8rem; color: #475569; margin-top: 0.2rem;">Score: <strong>{score_b:.2f}</strong></div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+            # ── What Each Candidate Demonstrates (side-by-side) ──
+            reasons_col_l, reasons_col_r = st.columns(2)
+            with reasons_col_l:
+                reasons_a_html = "".join(
+                    f'<div style="padding: 0.35rem 0; color: #1e293b; font-size: 0.88rem; display: flex; align-items: flex-start; gap: 0.5rem; '
+                    f'border-bottom: 1px solid rgba(99,102,241,.08);">'
+                    f'<span style="color: #4f46e5; font-weight: 700; flex-shrink: 0; margin-top: 1px;">•</span>'
+                    f'<span>{r}</span></div>'
+                    for r in reasons_a
+                )
+                st.markdown(
+                    f"""
+                    <div style="background: rgba(99,102,241,.02); border: 1px solid rgba(99,102,241,.12);
+                                border-radius: 12px; padding: 1rem 1.1rem; margin-top: 1rem; height: 100%;">
+                        <div style="font-size: 0.72rem; font-weight: 700; color: #4f46e5; text-transform: uppercase;
+                                    letter-spacing: 0.06em; margin-bottom: 0.55rem;">What Rank #{rank_a} demonstrates</div>
+                        {reasons_a_html}
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            with reasons_col_r:
+                reasons_b_html = "".join(
+                    f'<div style="padding: 0.35rem 0; color: #1e293b; font-size: 0.88rem; display: flex; align-items: flex-start; gap: 0.5rem; '
+                    f'border-bottom: 1px solid rgba(139,92,246,.08);">'
+                    f'<span style="color: #8b5cf6; font-weight: 700; flex-shrink: 0; margin-top: 1px;">•</span>'
+                    f'<span>{r}</span></div>'
+                    for r in reasons_b
+                )
+                st.markdown(
+                    f"""
+                    <div style="background: rgba(139,92,246,.02); border: 1px solid rgba(139,92,246,.12);
+                                border-radius: 12px; padding: 1rem 1.1rem; margin-top: 1rem; height: 100%;">
+                        <div style="font-size: 0.72rem; font-weight: 700; color: #8b5cf6; text-transform: uppercase;
+                                    letter-spacing: 0.06em; margin-bottom: 0.55rem;">What Rank #{rank_b} demonstrates</div>
+                        {reasons_b_html}
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+            # ── Key Gaps — Why Rank #A is ahead ──
+            if gaps:
+                gaps_html = "".join(
+                    f'<div style="padding: 0.4rem 0; color: #1e293b; font-size: 0.88rem; '
+                    f'display: flex; align-items: flex-start; gap: 0.5rem; '
+                    f'border-bottom: 1px solid rgba(0,0,0,.035);">'
+                    f'<span style="color: {"#10b981" if g.startswith("✓") else "#ef4444"}; font-weight: 700; flex-shrink: 0; margin-top: 1px;">{g[:1]}</span>'
+                    f'<span>{g[2:]}</span></div>'
+                    for g in gaps
+                )
+                st.markdown(
+                    f"""
+                    <div style="background: rgba(255,255,255,.6); border: 1px solid rgba(16,185,129,.15);
+                                border-left: 3px solid rgba(16,185,129,.5); border-radius: 12px;
+                                padding: 1.1rem 1.3rem; margin-top: 1rem;">
+                        <div style="font-size: 0.78rem; font-weight: 700; color: #047857; text-transform: uppercase;
+                                    letter-spacing: 0.06em; margin-bottom: 0.65rem;">Key Gaps — Why Rank #{rank_a} is ahead</div>
+                        {gaps_html}
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+            # ── Shared Strengths and What's Missing (Side-by-Side) ──
+            if shared or missing:
+                share_col, miss_col = st.columns(2)
+                
+                with share_col:
+                    if shared:
+                        shared_html = "".join(
+                            f'<div style="padding: 0.35rem 0; color: #475569; font-size: 0.88rem; display: flex; align-items: center; gap: 0.5rem; '
+                            f'border-bottom: 1px solid rgba(0,0,0,.025);">'
+                            f'<span style="color: #6366f1; flex-shrink: 0;">≡</span>'
+                            f'<span>{s}</span></div>'
+                            for s in shared
+                        )
+                        st.markdown(
+                            f"""
+                            <div style="background: rgba(99,102,241,.02); border: 1px solid rgba(99,102,241,.1);
+                                        border-radius: 12px; padding: 1rem 1.2rem; margin-top: 0.75rem; height: 100%;">
+                                <div style="font-size: 0.72rem; font-weight: 700; color: #6366f1; text-transform: uppercase;
+                                            letter-spacing: 0.06em; margin-bottom: 0.5rem;">Shared Strengths</div>
+                                {shared_html}
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.markdown(
+                            f"""
+                            <div style="background: rgba(99,102,241,.02); border: 1px solid rgba(99,102,241,.1);
+                                        border-radius: 12px; padding: 1rem 1.2rem; margin-top: 0.75rem; height: 100%;">
+                                <div style="font-size: 0.72rem; font-weight: 700; color: #6366f1; text-transform: uppercase;
+                                            letter-spacing: 0.06em; margin-bottom: 0.5rem;">Shared Strengths</div>
+                                <div style="color: #64748b; font-size: 0.85rem; font-style: italic;">No specific shared strengths identified.</div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                
+                with miss_col:
+                    if missing:
+                        missing_html = "".join(
+                            f'<div style="padding: 0.35rem 0; color: #475569; font-size: 0.88rem; display: flex; align-items: flex-start; gap: 0.5rem; '
+                            f'border-bottom: 1px solid rgba(0,0,0,.025);">'
+                            f'<span style="color: #ef4444; font-weight: 700; flex-shrink: 0; margin-top: 1px;">✗</span>'
+                            f'<span>{m}</span></div>'
+                            for m in missing
+                        )
+                        st.markdown(
+                            f"""
+                            <div style="background: rgba(239,68,68,.02); border: 1px solid rgba(239,68,68,.1);
+                                        border-radius: 12px; padding: 1rem 1.2rem; margin-top: 0.75rem; height: 100%;">
+                                <div style="font-size: 0.72rem; font-weight: 700; color: #ef4444; text-transform: uppercase;
+                                            letter-spacing: 0.06em; margin-bottom: 0.5rem;">What Rank #{rank_b} is Missing</div>
+                                {missing_html}
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.markdown(
+                            f"""
+                            <div style="background: rgba(239,68,68,.02); border: 1px solid rgba(239,68,68,.1);
+                                        border-radius: 12px; padding: 1rem 1.2rem; margin-top: 0.75rem; height: 100%;">
+                                <div style="font-size: 0.72rem; font-weight: 700; color: #ef4444; text-transform: uppercase;
+                                            letter-spacing: 0.06em; margin-bottom: 0.5rem;">What Rank #{rank_b} is Missing</div>
+                                <div style="color: #64748b; font-size: 0.85rem; font-style: italic;">No specific missing signals identified.</div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+
+            # ── Signal Comparison Bars ──
+            signal_bars_html = ""
+            for col, label in comparison_cols.items():
+                if col in df.columns:
+                    signal_bars_html += _render_comparison_bar(
+                        label, float(row_a[col]), float(row_b[col]), rank_a, rank_b
+                    )
+
+            signal_bars_html += _render_comparison_bar(
+                "Final Score", score_a, score_b, rank_a, rank_b
+            )
+
+            st.markdown(
+                f"""<div style="background: rgba(255,255,255,.5); border: 1px solid rgba(99,102,241,.12);
+                            border-radius: 12px; padding: 1.1rem 1.3rem; margin-top: 1rem;">
+                    <div style="font-size: 0.78rem; font-weight: 700; color: #4f46e5; text-transform: uppercase;
+                                letter-spacing: 0.06em; margin-bottom: 0.85rem;">Signal Comparison</div>
+                    {signal_bars_html}
+                </div>""",
+                unsafe_allow_html=True,
+            )
+
+            # ── Recruiter Insight ──
+            if delta < 1:
+                gap_word = "marginal"
+            elif delta < 5:
+                gap_word = "small but measurable"
+            elif delta < 15:
+                gap_word = "moderate"
+            else:
+                gap_word = "significant"
+
+            insight = (
+                f"Rank #{rank_b} is a strong match for this role. "
+                f"Rank #{rank_a} leads by {delta:.2f} points ({gap_word} gap). "
+            )
+            if gaps:
+                insight += f"The gap is driven by {len(gaps)} identifiable difference{'s' if len(gaps) != 1 else ''} shown above."
+            if shared:
+                insight += f" Both candidates share {len(shared)} common strength{'s' if len(shared) != 1 else ''}."
+
+            st.markdown(
+                f"""
+                <div style="background: rgba(99,102,241,.03); border: 1px solid rgba(99,102,241,.12);
+                            border-radius: 12px; padding: 1.1rem 1.3rem; margin-top: 0.75rem;">
+                    <div style="font-size: 0.78rem; font-weight: 700; color: #4f46e5; text-transform: uppercase;
+                                letter-spacing: 0.06em; margin-bottom: 0.5rem;">Recruiter Insight</div>
+                    <div style="font-size: 0.9rem; color: #334155; line-height: 1.65; font-style: italic;">
+                        "{insight}"
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        # ──────────────────────────────────────────────────────────
+        # CANDIDATE DRILL DOWN CONTENT
+        # ──────────────────────────────────────────────────────────
+
         if selected_cand:
             cand_row = df[df["candidate_id"] == selected_cand].iloc[0]
-            
+
             score_cols = {
                 'semantic_score': 'Semantic Score',
                 'role_alignment_score': 'Role Alignment Score',
@@ -1291,7 +1789,7 @@ if st.session_state.get("pipeline_complete", False):
                 'integrity_score': 'Integrity Score',
                 'score': 'Final Score'
             }
-            
+
             summary_html = f"""
             <div style="background: rgba(99,102,241,.03); border: 1px solid rgba(99,102,241,.15); border-radius: 16px; padding: 1.5rem; margin-bottom: 1.5rem;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -1307,19 +1805,14 @@ if st.session_state.get("pipeline_complete", False):
             </div>
             """
             st.markdown(summary_html, unsafe_allow_html=True)
-            
+
             st.markdown('<div style="font-size: 1rem; font-weight: 600; color: #334155; margin-bottom: 1rem;">Ranking signals contributing to the final recommendation</div>', unsafe_allow_html=True)
-            
+
             for col, label in score_cols.items():
                 if col in df.columns:
                     val = float(cand_row[col])
-                    if val > 100:
-                        pct = min(100, max(0, (val / 1000) * 100))
-                    elif val > 1:
-                        pct = min(100, max(0, val))
-                    else:
-                        pct = min(100, max(0, val * 100))
-                    
+                    pct = _normalize_pct(val)
+
                     bar_html = f"""
                     <div style="margin-bottom: 1rem;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 0.3rem;">
@@ -1332,7 +1825,7 @@ if st.session_state.get("pipeline_complete", False):
                     </div>
                     """
                     st.markdown(bar_html, unsafe_allow_html=True)
-                    
+
             reasoning_html = f"""
             <div style="background: rgba(255,255,255,.6); border: 1px solid rgba(99,102,241,.15); border-radius: 12px; padding: 1.2rem; margin-top: 1.5rem;">
                 <div style="font-size: 0.85rem; font-weight: 700; color: #4f46e5; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Reasoning</div>
@@ -1342,6 +1835,110 @@ if st.session_state.get("pipeline_complete", False):
             </div>
             """
             st.markdown(reasoning_html, unsafe_allow_html=True)
+
+            # ──────────────────────────────────────────────────────
+            # SECTION 1: AUTO COMPARISON WITH RANK #1
+            # ──────────────────────────────────────────────────────
+            current_rank = int(cand_row['rank'])
+
+            if current_rank == 1:
+                st.markdown(
+                    """
+                    <div style="background: rgba(16,185,129,.04); border: 1px solid rgba(16,185,129,.18);
+                                border-radius: 12px; padding: 1.2rem 1.5rem; margin-top: 1.5rem;
+                                display: flex; align-items: center; gap: 0.75rem;">
+                        <span style="font-size: 1.3rem;">🏆</span>
+                        <div>
+                            <div style="font-size: 0.85rem; font-weight: 700; color: #047857; text-transform: uppercase; letter-spacing: 0.05em;">
+                                Comparison with Top Candidate
+                            </div>
+                            <div style="font-size: 0.95rem; color: #065f46; font-weight: 500; margin-top: 0.2rem;">
+                                This is the highest ranked candidate. No comparison needed.
+                            </div>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            else:
+                rank1_row = df[df['rank'] == 1]
+                if not rank1_row.empty:
+                    rank1_row = rank1_row.iloc[0]
+                    rank1_id = rank1_row['candidate_id']
+
+                    with st.expander(
+                        f"🔻 Why This Candidate Ranked Lower — Compared with Rank #1 ({rank1_id})",
+                        expanded=True
+                    ):
+                        _render_full_comparison(
+                            rank1_row, cand_row,
+                            label_a="Top Ranked Candidate (#1)",
+                            label_b=f"Selected Candidate (#{current_rank})",
+                        )
+
+            # ──────────────────────────────────────────────────────
+            # SECTION 2: COMPARE ANY TWO CANDIDATES
+            # ──────────────────────────────────────────────────────
+            st.markdown(
+                '<div class="sec-head" style="margin-top:2.25rem">⚖️ Compare Any Two Candidates<div class="sh-line"></div></div>',
+                unsafe_allow_html=True,
+            )
+
+            all_candidates = df["candidate_id"].tolist()
+            cmp_col1, cmp_col2 = st.columns(2)
+            with cmp_col1:
+                cand_a_id = st.selectbox(
+                    "Candidate A",
+                    all_candidates,
+                    index=0,
+                    key="compare_cand_a",
+                )
+            with cmp_col2:
+                default_b_idx = min(1, len(all_candidates) - 1)
+                cand_b_id = st.selectbox(
+                    "Candidate B",
+                    all_candidates,
+                    index=default_b_idx,
+                    key="compare_cand_b",
+                )
+
+            if cand_a_id and cand_b_id:
+                if cand_a_id == cand_b_id:
+                    st.markdown(
+                        """
+                        <div style="background: rgba(245,158,11,.04); border: 1px solid rgba(245,158,11,.2);
+                                    border-radius: 12px; padding: 1rem 1.3rem; margin-top: 0.5rem;
+                                    display: flex; align-items: center; gap: 0.6rem;">
+                            <span style="font-size: 1.1rem;">⚠️</span>
+                            <span style="font-size: 0.92rem; color: #92400e; font-weight: 500;">
+                                Please select two different candidates to compare.
+                            </span>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    row_a = df[df["candidate_id"] == cand_a_id].iloc[0]
+                    row_b = df[df["candidate_id"] == cand_b_id].iloc[0]
+
+                    # Always put the higher-ranked candidate first
+                    if int(row_a['rank']) <= int(row_b['rank']):
+                        higher_row, lower_row = row_a, row_b
+                    else:
+                        higher_row, lower_row = row_b, row_a
+
+                    rank_h = int(higher_row['rank'])
+                    rank_l = int(lower_row['rank'])
+
+                    with st.expander(
+                        f"📊 Rank #{rank_h} ({higher_row['candidate_id']}) vs Rank #{rank_l} ({lower_row['candidate_id']})",
+                        expanded=True
+                    ):
+                        _render_full_comparison(
+                            higher_row, lower_row,
+                            label_a=f"Rank #{rank_h}",
+                            label_b=f"Rank #{rank_l}",
+                        )
 
         with open("submission.csv", "rb") as _f:
             st.download_button(

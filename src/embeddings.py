@@ -8,7 +8,7 @@ from sentence_transformers import SentenceTransformer
 class EmbeddingEngine:
 
     def __init__(self):
-
+ 
         from src.config import EMBEDDING_MODEL
 
         self.model = SentenceTransformer(
